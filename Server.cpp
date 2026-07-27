@@ -10,7 +10,6 @@
 #include "UserManager.h"
 
 
-using namespace std;
 
 Server::Server()
     : userManager(&database),
@@ -35,7 +34,7 @@ bool Server::Start(unsigned short port)
 
     if (listenSock < 0)
     {
-        cout << "Create Socket Failed" << endl;
+        std::cout << "Create Socket Failed" << std::endl;
         return false;
     }
 
@@ -50,22 +49,22 @@ bool Server::Start(unsigned short port)
         sizeof(addr))
         < 0)
     {
-        cout << "Bind Failed" << endl;
+        std::cout << "Bind Failed" << std::endl;
 
         return false;
     }
 
     if (listen(listenSock, SOMAXCONN) < 0)
     {
-        cout << "Listen Failed" << endl;
+        std::cout << "Listen Failed" << std::endl;
 
         return false;
     }
 
-    cout << "==================================" << endl;
-    cout << " MiniChat Server Started" << endl;
-    cout << " Port : " << port << endl;
-    cout << "==================================" << endl;
+    std::cout << "==================================" << std::endl;
+    std::cout << " MiniChat Server Started" << std::endl;
+    std::cout << " Port : " << port << std::endl;
+    std::cout << "==================================" << std::endl;
 
     // 打开数据库
     if (!database.Open("user.db"))
@@ -113,15 +112,15 @@ void Server::Run()
             ip,
             sizeof(ip));
 
-        cout << endl;
+        std::cout << std::endl;
 
-        cout << "==================================" << endl;
-        cout << "New Client Connected" << endl;
-        cout << "IP   : " << ip << endl;
-        cout << "Port : " << ntohs(clientAddr.sin_port) << endl;
-        cout << "==================================" << endl;
+        std::cout << "==================================" << std::endl;
+        std::cout << "New Client Connected" << std::endl;
+        std::cout << "IP   : " << ip << std::endl;
+        std::cout << "Port : " << ntohs(clientAddr.sin_port) << std::endl;
+        std::cout << "==================================" << std::endl;
 
-        thread t(ClientThread,
+        std::thread t(ClientThread,
             this,
             clientSock);
 
@@ -159,18 +158,18 @@ void Server::HandleClient(int clientSock)
                 ip,
                 sizeof(ip));
 
-            cout << endl;
-            cout << "==================================" << endl;
-            cout << "Client Disconnected" << endl;
-            cout << "IP   : " << ip << endl;
-            cout << "Port : " << ntohs(addr.sin_port) << endl;
+            std::cout << std::endl;
+            std::cout << "==================================" << std::endl;
+            std::cout << "Client Disconnected" << std::endl;
+            std::cout << "IP   : " << ip << std::endl;
+            std::cout << "Port : " << ntohs(addr.sin_port) << std::endl;
 
             if (!name.empty())
             {
-                cout << "User : " << name << endl;
+                std::cout << "User : " << name << std::endl;
             }
 
-            cout << "==================================" << endl;
+            std::cout << "==================================" << std::endl;
 
             manager.Logout(clientSock);
 
@@ -286,12 +285,12 @@ case MessageType::ADD_FRIEND:
 
     if (result == AddFriendResult::Success)
     {
-        cout << "[Friend] "
+        std::cout << "[Friend] "
             << msg.sender
             << " -> "
             << msg.receiver
             << " Request Sent."
-            << endl;
+            << std::endl;
 
         //==========================
         // 通知接收方
@@ -324,14 +323,14 @@ case MessageType::ADD_FRIEND:
                     "__PENDING_NOTIFY__");
             }
 
-            cout << "[Friend] Pending notify saved."
-                << endl;
+            std::cout << "[Friend] Pending notify saved."
+                << std::endl;
         }
     }
     else
     {
-        cout << "[Friend] Request Failed."
-            << endl;
+        std::cout << "[Friend] Request Failed."
+            << std::endl;
     }
 
     break;
@@ -359,11 +358,11 @@ case MessageType::ADD_FRIEND:
                     sizeof(reply),
                     0);
 
-                cout << "[CHAT BLOCKED] "
+                std::cout << "[CHAT BLOCKED] "
                     << msg.sender
                     << " -> "
                     << msg.receiver
-                    << endl;
+                    << std::endl;
 
                 break;
             }
@@ -378,13 +377,13 @@ case MessageType::ADD_FRIEND:
                     sizeof(msg),
                     0);
 
-                cout << "[CHAT] "
+                std::cout << "[CHAT] "
                     << msg.sender
                     << " -> "
                     << msg.receiver
                     << " : "
                     << msg.text
-                    << endl;
+                    << std::endl;
             }
             else
             {
@@ -396,15 +395,15 @@ case MessageType::ADD_FRIEND:
 
                 if (ok)
                 {
-                    cout << "[OFFLINE] "
+                    std::cout << "[OFFLINE] "
                         << msg.receiver
                         << " Offline, Message Saved."
-                        << endl;
+                        << std::endl;
                 }
                 else
                 {
-                    cout << "[OFFLINE] Save Failed."
-                        << endl;
+                    std::cout << "[OFFLINE] Save Failed."
+                        << std::endl;
                 }
             }
 
@@ -475,10 +474,10 @@ case MessageType::ADD_FRIEND:
         }
         case MessageType::READY:
         {
-            cout
+            std::cout
                 << "[READY] "
                 << msg.sender
-                << endl;
+                << std::endl;
 
             //-----------------------
             // 发离线消息
@@ -488,11 +487,11 @@ case MessageType::ADD_FRIEND:
                 offlineManager.GetMessages(
                     msg.sender);
 
-            cout
+            std::cout
                 << "[OFFLINE] "
                 << list.size()
                 << " message(s)."
-                << endl;
+                << std::endl;
 
             for (const auto& item : list)
             {
@@ -527,12 +526,12 @@ case MessageType::ADD_FRIEND:
                     sizeof(offlineMsg),
                     0);
 
-                cout
+                std::cout
                     << "[OFFLINE SEND] "
                     << item.sender
                     << " -> "
                     << item.receiver
-                    << endl;
+                    << std::endl;
             }
 
             if (!list.empty())
@@ -540,9 +539,9 @@ case MessageType::ADD_FRIEND:
                 offlineManager.DeleteMessages(
                     msg.sender);
 
-                cout
+                std::cout
                     << "[OFFLINE] Deleted."
-                    << endl;
+                    << std::endl;
             }
 
             break;
@@ -597,9 +596,9 @@ case MessageType::ADD_FRIEND:
 
             manager.Logout(clientSock);
 
-            cout << "[LOGOUT] "
+            std::cout << "[LOGOUT] "
                 << name
-                << endl;
+                << std::endl;
 
             break;
         }
