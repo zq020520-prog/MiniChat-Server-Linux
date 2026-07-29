@@ -1,6 +1,6 @@
 #include "Server.h"
 #include "Message.h"
-
+#include <errno.h>
 #include <iostream>
 #include <cstring>
 #include "SafeString.h"
@@ -9,173 +9,336 @@
 #include "Database.h"
 #include "UserManager.h"
 
-
-
 Server::Server()
-    : userManager(&database),
+    :
+    pool(8),
+    userManager(&database),
     friendManager(&database),
     offlineManager(&database)
 {
+
     listenSock = -1;
+
+    epollFd = -1;
+
 }
 
 Server::~Server()
 {
-    if (listenSock >=0)
+    if (listenSock >= 0)
     {
         close(listenSock);
     }
 }
+
+
 bool Server::Start(unsigned short port)
 {
 
+    listenSock =
+        socket(
+            AF_INET,
+            SOCK_STREAM,
+            0);
 
-    listenSock = socket(AF_INET, SOCK_STREAM, 0);
 
     if (listenSock < 0)
     {
-        std::cout << "Create Socket Failed" << std::endl;
+        perror("socket");
         return false;
     }
+
+
+
+    // 设置非阻塞
+    SetNonBlock(listenSock);
+
+
 
     sockaddr_in addr{};
 
+
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    addr.sin_addr.s_addr = INADDR_ANY;
 
-    if (bind(listenSock,
+    addr.sin_addr.s_addr =
+        INADDR_ANY;
+
+    addr.sin_port =
+        htons(port);
+
+
+
+    if (bind(
+        listenSock,
         (sockaddr*)&addr,
-        sizeof(addr))
-        < 0)
+        sizeof(addr)) < 0)
     {
-        std::cout << "Bind Failed" << std::endl;
-
+        perror("bind");
         return false;
     }
 
-    if (listen(listenSock, SOMAXCONN) < 0)
-    {
-        std::cout << "Listen Failed" << std::endl;
 
+
+    if (listen(
+        listenSock,
+        128) < 0)
+    {
+        perror("listen");
         return false;
     }
 
-    std::cout << "==================================" << std::endl;
-    std::cout << " MiniChat Server Started" << std::endl;
-    std::cout << " Port : " << port << std::endl;
-    std::cout << "==================================" << std::endl;
 
-    // 打开数据库
-    if (!database.Open("user.db"))
+
+    // 创建epoll
+
+    epollFd =
+        epoll_create1(0);
+
+
+
+    if (epollFd < 0)
     {
+        perror("epoll_create");
         return false;
     }
 
-    // 创建数据表
-    if (!database.CreateTables())
-    {
-        return false;
-    }
+
+
+    epoll_event ev{};
+
+
+    ev.events =
+        EPOLLIN;
+
+
+    ev.data.fd =
+        listenSock;
+
+
+
+    epoll_ctl(
+        epollFd,
+        EPOLL_CTL_ADD,
+        listenSock,
+        &ev);
+
+
+
+    std::cout
+        << "Server Start Port:"
+        << port
+        << std::endl;
+
+
 
     return true;
 
-
 }
 
-void Server::ClientThread(Server* server,
-    int clientSock)
-{
-    server->HandleClient(clientSock);
-}
 void Server::Run()
 {
+
+    epoll_event events[1024];
+
+
     while (true)
     {
-        sockaddr_in clientAddr{};
 
-        socklen_t len = sizeof(clientAddr);
 
-        int clientSock =
-            accept(listenSock,
-                (sockaddr*)&clientAddr,
-                 &len);
+        int count =
+            epoll_wait(
+                epollFd,
+                events,
+                1024,
+                -1);
 
-        if (clientSock < 0)
+
+
+        if (count < 0)
+        {
+            perror("epoll_wait");
             continue;
+        }
 
-        char ip[32]{};
 
-        inet_ntop(
-            AF_INET,
-            &clientAddr.sin_addr,
-            ip,
-            sizeof(ip));
 
-        std::cout << std::endl;
+        for (int i = 0;i < count;i++)
+        {
 
-        std::cout << "==================================" << std::endl;
-        std::cout << "New Client Connected" << std::endl;
-        std::cout << "IP   : " << ip << std::endl;
-        std::cout << "Port : " << ntohs(clientAddr.sin_port) << std::endl;
-        std::cout << "==================================" << std::endl;
 
-        std::thread t(ClientThread,
-            this,
-            clientSock);
+            int fd =
+                events[i].data.fd;
 
-        t.detach();
+
+
+            // 新连接
+
+            if (fd == listenSock)
+            {
+
+
+                while (true)
+                {
+
+
+                    sockaddr_in clientAddr{};
+
+
+                    socklen_t len =
+                        sizeof(clientAddr);
+
+
+
+                    int clientSock =
+                        accept(
+                            listenSock,
+                            (sockaddr*)&clientAddr,
+                            &len);
+
+
+
+                    if (clientSock < 0)
+                    {
+
+                        break;
+
+                    }
+
+
+
+                    SetNonBlock(clientSock);
+
+
+
+                    AddClient(clientSock);
+
+
+
+                    std::cout
+                        << "New Client:"
+                        << clientSock
+                        << std::endl;
+
+
+                }
+
+
+            }
+
+
+            // 客户端数据
+
+            else
+            {
+
+
+                int clientSock = fd;
+
+
+
+                pool.AddTask(
+                    [this, clientSock]()
+                    {
+
+                        HandleClient(
+                            clientSock);
+
+                    });
+
+
+            }
+
+
+        }
+
+
     }
+
+
+}
+
+void Server::AddClient(int clientSock)
+{
+
+    epoll_event ev{};
+
+
+    ev.events =
+        EPOLLIN;
+
+
+    ev.data.fd =
+        clientSock;
+
+
+
+    int ret =
+        epoll_ctl(
+            epollFd,
+            EPOLL_CTL_ADD,
+            clientSock,
+            &ev);
+
+
+
+    if (ret < 0)
+    {
+        perror("epoll_ctl add");
+
+        close(clientSock);
+    }
+
+}
+void Server::RemoveClient(int clientSock)
+{
+
+
+    epoll_ctl(
+        epollFd,
+        EPOLL_CTL_DEL,
+        clientSock,
+        nullptr);
+
+
+
+    close(clientSock);
+
+
+
+    std::cout
+        << "Client offline:"
+        << clientSock
+        << std::endl;
+
 }
 void Server::HandleClient(int clientSock)
 {
-    Message msg;
 
-    while (true)
-    {
-        memset(&msg, 0, sizeof(msg));
+    Message msg{};
 
-        int len = recv(clientSock,
+
+    int len =
+        recv(
+            clientSock,
             (char*)&msg,
             sizeof(msg),
             0);
 
-        if (len <= 0)
+
+
+        // 客户端断开
+        if (len < 0)
         {
-            std::string name = manager.GetUserName(clientSock);
-
-            sockaddr_in addr{};
-            socklen_t addrLen = sizeof(addr);
-
-            getpeername(clientSock,
-                (sockaddr*)&addr,
-                &addrLen);
-
-            char ip[32]{};
-
-            inet_ntop(AF_INET,
-                &addr.sin_addr,
-                ip,
-                sizeof(ip));
-
-            std::cout << std::endl;
-            std::cout << "==================================" << std::endl;
-            std::cout << "Client Disconnected" << std::endl;
-            std::cout << "IP   : " << ip << std::endl;
-            std::cout << "Port : " << ntohs(addr.sin_port) << std::endl;
-
-            if (!name.empty())
+            if (errno == EAGAIN ||
+                errno == EWOULDBLOCK)
             {
-                std::cout << "User : " << name << std::endl;
+                return;
             }
-
-            std::cout << "==================================" << std::endl;
-
-            manager.Logout(clientSock);
-
-            close(clientSock);
-
-            break;
+        }
+        else if (len == 0)
+        {
+            RemoveClient(clientSock);
+            return;
         }
 
         switch (msg.type)
@@ -609,3 +772,24 @@ case MessageType::ADD_FRIEND:
     }
 }
 
+void Server::SetNonBlock(int fd)
+{
+
+    int flag =
+        fcntl(
+            fd,
+            F_GETFL,
+            0);
+
+
+
+    flag |= O_NONBLOCK;
+
+
+
+    fcntl(
+        fd,
+        F_SETFL,
+        flag);
+
+}

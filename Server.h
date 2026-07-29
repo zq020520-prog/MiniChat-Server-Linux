@@ -5,7 +5,8 @@
 #include <cstdint>
 #include <arpa/inet.h>
 #include <unistd.h>
-#include <thread>
+#include <sys/epoll.h>
+#include "ThreadPool.h"
 #include "ClientManager.h"
 #include "Database.h"
 #include "UserManager.h"
@@ -26,9 +27,11 @@ public:
 
 private:
 
-    static void ClientThread(
-        Server* server,
-        int clientSock);
+    void SetNonBlock(int fd);
+
+    void AddClient(int clientSock);
+
+    void RemoveClient(int clientSock);
 
     void HandleClient(
         int clientSock);
@@ -36,6 +39,11 @@ private:
 private:
 
     int listenSock;
+
+    int epollFd;
+
+
+    ThreadPool pool;
 
     ClientManager manager;
 
