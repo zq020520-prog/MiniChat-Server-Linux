@@ -4,7 +4,7 @@
 #include <iostream>
 #include <cstring>
 #include "SafeString.h"
-
+#include <fcntl.h>
 #include "ClientManager.h"
 #include "Database.h"
 #include "UserManager.h"
@@ -427,77 +427,77 @@ void Server::HandleClient(int clientSock)
     
             break;
         }
-case MessageType::ADD_FRIEND:
-{
-    Message reply{};
-
-    reply.type = MessageType::ADD_FRIEND_RESULT;
-
-    AddFriendResult result =
-        friendManager.SendRequest(
-            msg.sender,
-            msg.receiver);
-
-    reply.result = (int)result;
-
-    // 回复申请者
-    send(clientSock,
-        (char*)&reply,
-        sizeof(reply),
-        0);
-
-    if (result == AddFriendResult::Success)
+    case MessageType::ADD_FRIEND:
     {
-        std::cout << "[Friend] "
-            << msg.sender
-            << " -> "
-            << msg.receiver
-            << " Request Sent."
-            << std::endl;
+        Message reply{};
 
-        //==========================
-        // 通知接收方
-        //==========================
-        int target =
-            manager.GetSocket(msg.receiver);
+        reply.type = MessageType::ADD_FRIEND_RESULT;
 
-        if (target >= 0)
+        AddFriendResult result =
+            friendManager.SendRequest(
+                msg.sender,
+                msg.receiver);
+
+        reply.result = (int)result;
+
+        // 回复申请者
+        send(clientSock,
+            (char*)&reply,
+            sizeof(reply),
+            0);
+
+        if (result == AddFriendResult::Success)
         {
-            Message notify{};
+            std::cout << "[Friend] "
+                << msg.sender
+                << " -> "
+                << msg.receiver
+                << " Request Sent."
+                << std::endl;
 
-            notify.type =
-                MessageType::PENDING_NOTIFY;
+            //==========================
+            // 通知接收方
+            //==========================
+            int target =
+                manager.GetSocket(msg.receiver);
 
-            send(target,
-                (char*)&notify,
-                sizeof(notify),
-                0);
+            if (target >= 0)
+            {
+                Message notify{};
+
+                notify.type =
+                    MessageType::PENDING_NOTIFY;
+
+                send(target,
+                    (char*)&notify,
+                    sizeof(notify),
+                    0);
+            }
+            else
+            {
+                // 先判断是否已经保存过好友申请通知
+                if (!offlineManager.HasSystemNotify(
+                    msg.receiver,
+                    "__PENDING_NOTIFY__"))
+                {
+                    offlineManager.SaveMessage(
+                        "SYSTEM",
+                        msg.receiver,
+                        "__PENDING_NOTIFY__");
+                }
+
+                std::cout << "[Friend] Pending notify saved."
+                    << std::endl;
+            }
         }
         else
         {
-            // 先判断是否已经保存过好友申请通知
-            if (!offlineManager.HasSystemNotify(
-                msg.receiver,
-                "__PENDING_NOTIFY__"))
-            {
-                offlineManager.SaveMessage(
-                    "SYSTEM",
-                    msg.receiver,
-                    "__PENDING_NOTIFY__");
-            }
-
-            std::cout << "[Friend] Pending notify saved."
+            std::cout << "[Friend] Request Failed."
                 << std::endl;
         }
-    }
-    else
-    {
-        std::cout << "[Friend] Request Failed."
-            << std::endl;
-    }
 
-    break;
-}
+        break;
+    }
         case MessageType::CHAT:
         {
             // 先检查双方是否还是好友
@@ -769,7 +769,7 @@ case MessageType::ADD_FRIEND:
         default:
             break;
         }
-    }
+    
 }
 
 void Server::SetNonBlock(int fd)
