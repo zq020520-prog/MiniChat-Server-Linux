@@ -43,9 +43,6 @@ void Database::Close()
 // 执行SQL语句
 bool Database::Execute(const std::string& sql)
 {
-    std::lock_guard<std::mutex>
-        lock(dbMutex);
-
     char* errMsg = nullptr;
 
     int rc = sqlite3_exec(
@@ -63,12 +60,6 @@ bool Database::Execute(const std::string& sql)
         {
             std::cout << errMsg << std::endl;
             sqlite3_free(errMsg);
-        }
-        else
-        {
-            std::cout
-                << sqlite3_errmsg(db)
-                << std::endl;
         }
 
         return false;
@@ -130,8 +121,6 @@ bool Database::CreateTables()
 
 bool Database::Exists(const std::string& sql)
 {
-    std::lock_guard<std::mutex>
-        lock(dbMutex);
     sqlite3_stmt* stmt = nullptr;
 
     int rc = sqlite3_prepare_v2(
@@ -159,8 +148,6 @@ bool Database::QueryString(
     const std::string& sql,
     std::string& result)
 {
-    std::lock_guard<std::mutex>
-        lock(dbMutex);
     sqlite3_stmt* stmt = nullptr;
 
     int rc = sqlite3_prepare_v2(
@@ -202,8 +189,6 @@ bool Database::QueryColumn(
     const std::string& sql,
     std::vector<std::string>& result)
 {
-    std::lock_guard<std::mutex>
-        lock(dbMutex);
     sqlite3_stmt* stmt = nullptr;
 
     int rc = sqlite3_prepare_v2(
@@ -240,8 +225,6 @@ bool Database::QueryColumn(
 std::vector<std::string> Database::QueryVector(
     const std::string& sql)
 {
-    std::lock_guard<std::mutex>
-        lock(dbMutex);
     std::vector<std::string> result;
 
     sqlite3_stmt* stmt = nullptr;

@@ -5,15 +5,12 @@
 #include <cstdint>
 #include <arpa/inet.h>
 #include <unistd.h>
-#include <sys/epoll.h>
-#include "ThreadPool.h"
+#include <thread>
 #include "ClientManager.h"
 #include "Database.h"
 #include "UserManager.h"
 #include "FriendManager.h"
 #include "OfflineMessageManager.h"
-#include <unordered_set>
-#include <mutex>
 
 class Server
 {
@@ -29,11 +26,9 @@ public:
 
 private:
 
-    void SetNonBlock(int fd);
-
-    void AddClient(int clientSock);
-
-    void RemoveClient(int clientSock);
+    static void ClientThread(
+        Server* server,
+        int clientSock);
 
     void HandleClient(
         int clientSock);
@@ -41,18 +36,6 @@ private:
 private:
 
     int listenSock;
-
-    int epollFd;
-
-    std::unordered_set<int> processingClients;
-
-    std::mutex processingMutex;
-
-    std::unordered_set<int> closedClients;
-
-    std::mutex closeMutex;
-
-    ThreadPool pool;
 
     ClientManager manager;
 
