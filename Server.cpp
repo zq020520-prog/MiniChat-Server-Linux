@@ -34,6 +34,18 @@ Server::~Server()
 
 bool Server::Start(unsigned short port)
 {
+    // 打开数据库
+    if (!database.Open("user.db"))
+    {
+        return false;
+    }
+
+    // 创建数据表
+    if (!database.CreateTables())
+    {
+        return false;
+    }
+
 
     listenSock =
         socket(
