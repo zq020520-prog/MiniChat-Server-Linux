@@ -334,8 +334,14 @@ void Server::HandleClient(int clientSock)
             {
                 return;
             }
+
+
+            RemoveClient(clientSock);
+            return;
         }
-        else if (len == 0)
+
+
+        if (len == 0)
         {
             RemoveClient(clientSock);
             return;

@@ -61,6 +61,12 @@ bool Database::Execute(const std::string& sql)
             std::cout << errMsg << std::endl;
             sqlite3_free(errMsg);
         }
+        else
+        {
+            std::cout
+                << sqlite3_errmsg(db)
+                << std::endl;
+        }
 
         return false;
     }
