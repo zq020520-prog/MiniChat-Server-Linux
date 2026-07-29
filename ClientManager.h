@@ -4,7 +4,7 @@
 #include <sys/socket.h>
 #include <unordered_map>
 #include <string>
-#include <mutex>
+#include <shared_mutex>
 
 class ClientManager
 {
@@ -34,5 +34,5 @@ private:
     std::unordered_map<int, std::string> socketUsers;
 
     // 多线程保护
-    std::mutex mtx;
+    std::shared_mutex mtx;
 };

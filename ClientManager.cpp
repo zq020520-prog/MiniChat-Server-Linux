@@ -5,7 +5,7 @@
 bool ClientManager::Login(const std::string& username,
     int sock)
 {
-    std::lock_guard<std::mutex> lock(mtx);
+    std::unique_lock<std::shared_mutex> lock(mtx);
 
     // 如果该socket之前登录过其他账号，先清除旧记录
     auto it = socketUsers.find(sock);
@@ -30,7 +30,7 @@ bool ClientManager::Login(const std::string& username,
 }
 void ClientManager::Logout(int sock)
 {
-    std::lock_guard<std::mutex> lock(mtx);
+    std::unique_lock<std::shared_mutex> lock(mtx);
 
     auto it = socketUsers.find(sock);
 
@@ -47,7 +47,7 @@ void ClientManager::Logout(int sock)
 
 int ClientManager::GetSocket(const std::string& username)
 {
-    std::lock_guard<std::mutex> lock(mtx);
+    std::shared_lock<std::shared_mutex> lock(mtx);
 
     auto it = onlineUsers.find(username);
 
@@ -59,7 +59,7 @@ int ClientManager::GetSocket(const std::string& username)
 
 std::string ClientManager::GetUserName(int sock)
 {
-    std::lock_guard<std::mutex> lock(mtx);
+    std::shared_lock<std::shared_mutex> lock(mtx);
 
     auto it = socketUsers.find(sock);
 
@@ -71,7 +71,7 @@ std::string ClientManager::GetUserName(int sock)
 
 bool ClientManager::IsOnline(const std::string& username)
 {
-    std::lock_guard<std::mutex> lock(mtx);
+    std::shared_lock<std::shared_mutex> lock(mtx);
 
     return onlineUsers.find(username) != onlineUsers.end();
 }
