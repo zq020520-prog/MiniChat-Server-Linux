@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 #include "sqlite3.h"
-
+#include <mutex>
 class Database
 {
 public:
@@ -40,6 +40,8 @@ public:
     sqlite3* GetDB();
 
 private:
+
+    std::mutex dbMutex;
 
     sqlite3* db;
 

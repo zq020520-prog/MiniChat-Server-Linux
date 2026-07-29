@@ -242,9 +242,21 @@ void Server::Run()
 
             else
             {
-
-
                 int clientSock = fd;
+
+
+                {
+                    std::lock_guard<std::mutex> lock(processingMutex);
+
+
+                    if (processingClients.count(clientSock))
+                    {
+                        continue;
+                    }
+
+
+                    processingClients.insert(clientSock);
+                }
 
 
 
@@ -252,11 +264,14 @@ void Server::Run()
                     [this, clientSock]()
                     {
 
-                        HandleClient(
-                            clientSock);
+                        HandleClient(clientSock);
+
+
+                        std::lock_guard<std::mutex> lock(processingMutex);
+
+                        processingClients.erase(clientSock);
 
                     });
-
 
             }
 
@@ -304,6 +319,21 @@ void Server::AddClient(int clientSock)
 void Server::RemoveClient(int clientSock)
 {
 
+    {
+        std::lock_guard<std::mutex>
+            lock(closeMutex);
+
+
+        if (closedClients.count(clientSock))
+        {
+            return;
+        }
+
+
+        closedClients.insert(clientSock);
+    }
+
+
 
     epoll_ctl(
         epollFd,
@@ -312,9 +342,7 @@ void Server::RemoveClient(int clientSock)
         nullptr);
 
 
-
     close(clientSock);
-
 
 
     std::cout

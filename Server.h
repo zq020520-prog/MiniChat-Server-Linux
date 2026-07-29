@@ -12,6 +12,8 @@
 #include "UserManager.h"
 #include "FriendManager.h"
 #include "OfflineMessageManager.h"
+#include <unordered_set>
+#include <mutex>
 
 class Server
 {
@@ -42,6 +44,13 @@ private:
 
     int epollFd;
 
+    std::unordered_set<int> processingClients;
+
+    std::mutex processingMutex;
+
+    std::unordered_set<int> closedClients;
+
+    std::mutex closeMutex;
 
     ThreadPool pool;
 
