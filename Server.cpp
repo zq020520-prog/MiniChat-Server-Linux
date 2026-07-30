@@ -326,6 +326,17 @@ void Server::HandleClient(int clientSock)
             if (errno == EAGAIN ||
                 errno == EWOULDBLOCK)
             {
+                std::cout
+                    << "EAGAIN fd="
+                    << clientSock
+                    << std::endl;
+
+
+                {
+                    std::lock_guard<std::mutex> lock(clientStateMutex);
+
+                    clientStates[clientSock].processing = false;
+                }
                 return;
             }
 
