@@ -30,6 +30,7 @@ private:
 
     void HandleClient(int clientSock);
 
+    void SetNonBlock(int clientSock)
 private:
 
     int listenSock;
