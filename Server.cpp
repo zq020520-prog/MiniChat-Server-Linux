@@ -409,7 +409,7 @@ void Server::HandleClient(int clientSock)
         case MessageType::LOGOUT:
         { 
 
-            std::cout << "LLLLLL" << std::endl;
+            std::cout << "LOGOUT" << std::endl;
             manager.Logout(clientSock);
 
            
