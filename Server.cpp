@@ -242,7 +242,7 @@ void Server::Run()
         }
     }
 }
-void SetNonBlock(int fd)
+void Server::SetNonBlock(int fd)
 {
 
     int flag = fcntl(fd,F_GETFL,0);
