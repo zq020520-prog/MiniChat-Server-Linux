@@ -323,6 +323,11 @@ void Server::HandleClient(int clientSock)
         }
         if (ret < 0)
         {
+            if (errno == EAGAIN ||
+                errno == EWOULDBLOCK)
+            {
+                return;
+            }
 
             std::cout << "HandleClient < 0 " << std::endl;
             manager.Logout(clientSock);
