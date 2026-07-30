@@ -29,7 +29,7 @@ public:
 
     void EnableRead(int clientSock);
 
-    void RemoveConnection(int clientSock)
+    void RemoveConnection(int clientSock);
 
 private:
 

@@ -268,7 +268,7 @@ void Server::HandleClient(int clientSock)
                 << clientSock
                 << std::endl;
            
-            RemoveConnection(int clientSock);
+            RemoveConnection(clientSock);
        
             return;
         }
@@ -282,7 +282,7 @@ void Server::HandleClient(int clientSock)
                 return;
             }
 
-            RemoveConnection(int clientSock);
+            RemoveConnection(clientSock);
     
             return;
         }
