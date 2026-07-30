@@ -1,22 +1,24 @@
 #include "Server.h"
 #include "Message.h"
-
 #include <iostream>
 #include <cstring>
+#include <unistd.h>
+#include <fcntl.h>
+#include <errno.h>
 #include "SafeString.h"
-
 #include "ClientManager.h"
 #include "Database.h"
 #include "UserManager.h"
 
-
-
 Server::Server()
-    : userManager(&database),
+    : 
+    pool(4), 
+    userManager(&database),
     friendManager(&database),
     offlineManager(&database)
 {
     listenSock = -1;
+    epollFd = -1;
 }
 
 Server::~Server()
@@ -25,10 +27,12 @@ Server::~Server()
     {
         close(listenSock);
     }
+    if (epollFd >= 0)
+        close(epollFd);
+
 }
 bool Server::Start(unsigned short port)
 {
-
 
     listenSock = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -37,6 +41,8 @@ bool Server::Start(unsigned short port)
         std::cout << "Create Socket Failed" << std::endl;
         return false;
     }
+
+    SetNonBlock(listenSock);
 
     sockaddr_in addr{};
 
@@ -78,104 +84,241 @@ bool Server::Start(unsigned short port)
         return false;
     }
 
+    // 创建epoll
+    epollFd = epoll_create1(0);
+
+
+    if (epollFd < 0)
+    {
+        perror("epoll_create1");
+
+        return false;
+    }
+    // 添加监听socket
+
+    epoll_event ev{};
+
+    ev.events = EPOLLIN;
+
+    ev.data.fd = listenSock;
+
+    if (epoll_ctl(
+        epollFd,
+        EPOLL_CTL_ADD,
+        listenSock,
+        &ev) < 0)
+    {
+        perror("epoll_ctl");
+
+        return false;
+    }
+
+    std::cout
+        << "epoll init success"
+        << std::endl;
+
     return true;
 
-
 }
 
-void Server::ClientThread(Server* server,
-    int clientSock)
-{
-    server->HandleClient(clientSock);
-}
 void Server::Run()
 {
+
+    epoll_event events[1024];
+
     while (true)
     {
-        sockaddr_in clientAddr{};
 
-        socklen_t len = sizeof(clientAddr);
+        int count =
+            epoll_wait(epollFd,events, 1024, -1);
 
-        int clientSock =
-            accept(listenSock,
-                (sockaddr*)&clientAddr,
-                 &len);
-
-        if (clientSock < 0)
+        if (count < 0)
+        {
+            perror("epoll_wait");
             continue;
+        }
 
-        char ip[32]{};
+        for (int i = 0;i < count;i++)
+        {
 
-        inet_ntop(
-            AF_INET,
-            &clientAddr.sin_addr,
-            ip,
-            sizeof(ip));
+           int fd =
+                events[i].data.fd;
 
-        std::cout << std::endl;
+            //新客户端连接
+            if (fd == listenSock)
+            {
 
-        std::cout << "==================================" << std::endl;
-        std::cout << "New Client Connected" << std::endl;
-        std::cout << "IP   : " << ip << std::endl;
-        std::cout << "Port : " << ntohs(clientAddr.sin_port) << std::endl;
-        std::cout << "==================================" << std::endl;
+                while (true)
+                {
 
-        std::thread t(ClientThread,
-            this,
-            clientSock);
+                    sockaddr_in clientAddr{};
 
-        t.detach();
+                    socklen_t len =
+                        sizeof(clientAddr);
+
+
+                    int clientSock =
+                        accept(
+                            listenSock,
+                            (sockaddr*)&clientAddr,
+                            &len
+                        );
+
+                    //非阻塞accept
+
+                    if (clientSock < 0)
+                    {
+                        if (errno == EAGAIN ||
+                            errno == EWOULDBLOCK)
+                        {
+                            break;
+                        }
+
+                        perror("accept");
+
+                        break;
+
+                    }
+
+                      //  设置客户端socket非阻塞           
+                    SetNonBlock(clientSock);
+
+                        //加入epoll
+                    epoll_event clientEvent{};
+
+                    clientEvent.events =
+                        EPOLLIN;
+
+                    clientEvent.data.fd =
+                        clientSock;
+
+                    epoll_ctl(
+                        epollFd,
+                        EPOLL_CTL_ADD,
+                        clientSock,
+                        &clientEvent
+                    );
+
+                    std::cout << "new client:"  << clientSock  << std::endl;
+
+                }
+
+            }
+
+                //客户端数据
+            else
+            {
+
+                int clientSock = fd;
+
+                if (events[i].events &
+                    (EPOLLERR | EPOLLHUP | EPOLLRDHUP))
+                {
+
+                    manager.Logout(clientSock);
+                    //客户端关闭
+
+                    epoll_ctl(
+                        epollFd,
+                        EPOLL_CTL_DEL,
+                        clientSock,
+                        nullptr );
+
+                    close(clientSock);
+
+                    continue;
+
+                }
+                if (events[i].events & EPOLLIN)
+                {
+                    pool.Submit(
+                        [this, clientSock]()
+                        {
+                            HandleClient(clientSock);
+
+                        });
+                }
+            }
+        }
+    }
+}
+void SetNonBlock(int fd)
+{
+
+    int flag = fcntl(fd,F_GETFL,0);
+
+    if (flag == -1)
+    {
+        perror("fcntl get");
+        return;
+    }
+
+    flag |= O_NONBLOCK;
+
+    if (fcntl(
+        fd,
+        F_SETFL,
+        flag
+    ) == -1)
+    {
+        perror("fcntl set");
     }
 }
 void Server::HandleClient(int clientSock)
 {
     Message msg;
 
-    while (true)
-    {
-        memset(&msg, 0, sizeof(msg));
+        int ret =
+            recv(
+                clientSock,
+                (char*)&msg,
+                sizeof(msg),
+                0);
 
-        int len = recv(clientSock,
-            (char*)&msg,
-            sizeof(msg),
-            0);
-
-        if (len <= 0)
+        if (ret == 0)
         {
-            std::string name = manager.GetUserName(clientSock);
 
-            sockaddr_in addr{};
-            socklen_t addrLen = sizeof(addr);
-
-            getpeername(clientSock,
-                (sockaddr*)&addr,
-                &addrLen);
-
-            char ip[32]{};
-
-            inet_ntop(AF_INET,
-                &addr.sin_addr,
-                ip,
-                sizeof(ip));
-
-            std::cout << std::endl;
-            std::cout << "==================================" << std::endl;
-            std::cout << "Client Disconnected" << std::endl;
-            std::cout << "IP   : " << ip << std::endl;
-            std::cout << "Port : " << ntohs(addr.sin_port) << std::endl;
-
-            if (!name.empty())
-            {
-                std::cout << "User : " << name << std::endl;
-            }
-
-            std::cout << "==================================" << std::endl;
+            std::cout
+                << "client disconnect:"
+                << clientSock
+                << std::endl;
 
             manager.Logout(clientSock);
+            //客户端关闭
+
+            epoll_ctl(
+                epollFd,
+                EPOLL_CTL_DEL,
+                clientSock,
+                nullptr
+            );
 
             close(clientSock);
 
-            break;
+            return;
+        }
+        if (ret < 0)
+        {
+
+            if (errno == EAGAIN ||
+                errno == EWOULDBLOCK)
+            {
+                // 当前没有数据
+                return;
+            }
+
+            manager.Logout(clientSock);
+
+            epoll_ctl(
+                epollFd,
+                EPOLL_CTL_DEL,
+                clientSock,
+                nullptr
+            );
+
+            close(clientSock);
+
+            return;
         }
 
         switch (msg.type)
@@ -260,81 +403,100 @@ void Server::HandleClient(int clientSock)
                 (char*)&reply,
                 sizeof(reply),
                 0);
-            
-    
+               
             break;
         }
-case MessageType::ADD_FRIEND:
-{
-    Message reply{};
-
-    reply.type = MessageType::ADD_FRIEND_RESULT;
-
-    AddFriendResult result =
-        friendManager.SendRequest(
-            msg.sender,
-            msg.receiver);
-
-    reply.result = (int)result;
-
-    // 回复申请者
-    send(clientSock,
-        (char*)&reply,
-        sizeof(reply),
-        0);
-
-    if (result == AddFriendResult::Success)
-    {
-        std::cout << "[Friend] "
-            << msg.sender
-            << " -> "
-            << msg.receiver
-            << " Request Sent."
-            << std::endl;
-
-        //==========================
-        // 通知接收方
-        //==========================
-        int target =
-            manager.GetSocket(msg.receiver);
-
-        if (target >= 0)
+        case MessageType::LOGOUT:
         {
-            Message notify{};
+            std::string name =
+                manager.GetUserName(clientSock);
 
-            notify.type =
-                MessageType::PENDING_NOTIFY;
+            manager.Logout(clientSock);
 
-            send(target,
-                (char*)&notify,
-                sizeof(notify),
-                0);
+            std::cout << "[LOGOUT] "
+                << name
+                << std::endl;
+
+            epoll_ctl(
+                epollFd,
+                EPOLL_CTL_DEL,
+                clientSock,
+                nullptr
+            );
+
+            close(clientSock);
+
+            break;
         }
-        else
+        case MessageType::ADD_FRIEND:
         {
-            // 先判断是否已经保存过好友申请通知
-            if (!offlineManager.HasSystemNotify(
-                msg.receiver,
-                "__PENDING_NOTIFY__"))
+            Message reply{};
+
+            reply.type = MessageType::ADD_FRIEND_RESULT;
+
+            AddFriendResult result =
+                friendManager.SendRequest(
+                    msg.sender,
+                    msg.receiver);
+
+            reply.result = (int)result;
+
+            // 回复申请者
+            send(clientSock,
+                (char*)&reply,
+                sizeof(reply),
+                0);
+
+            if (result == AddFriendResult::Success)
             {
-                offlineManager.SaveMessage(
-                    "SYSTEM",
-                    msg.receiver,
-                    "__PENDING_NOTIFY__");
+                std::cout << "[Friend] "
+                    << msg.sender
+                    << " -> "
+                    << msg.receiver
+                    << " Request Sent."
+                    << std::endl;
+
+                // 通知接收方
+                int target =
+                    manager.GetSocket(msg.receiver);
+
+                if (target >= 0)
+                {
+                    Message notify{};
+
+                    notify.type =
+                        MessageType::PENDING_NOTIFY;
+
+                    send(target,
+                        (char*)&notify,
+                        sizeof(notify),
+                        0);
+                }
+                else
+                {
+                    // 先判断是否已经保存过好友申请通知
+                    if (!offlineManager.HasSystemNotify(
+                        msg.receiver,
+                        "__PENDING_NOTIFY__"))
+                    {
+                        offlineManager.SaveMessage(
+                            "SYSTEM",
+                            msg.receiver,
+                            "__PENDING_NOTIFY__");
+                    }
+
+                    std::cout << "[Friend] Pending notify saved."
+                        << std::endl;
+                }
+            }
+            else
+            {
+                std::cout << "[Friend] Request Failed."
+                    << std::endl;
             }
 
-            std::cout << "[Friend] Pending notify saved."
-                << std::endl;
+            break;
         }
-    }
-    else
-    {
-        std::cout << "[Friend] Request Failed."
-            << std::endl;
-    }
-
-    break;
-}
         case MessageType::CHAT:
         {
             // 先检查双方是否还是好友
@@ -410,68 +572,9 @@ case MessageType::ADD_FRIEND:
             break;
         }
 
-        case MessageType::FRIEND_REQUEST_LIST:
-        {
-            Message reply{};
 
-            reply.type =
-                MessageType::FRIEND_REQUEST_LIST;
 
-            std::string list =
-                friendManager.GetPendingString(
-                    msg.sender);
 
-            strcpy_s(reply.text,
-                MAX_TEXT_LEN,
-                list.c_str());
-
-            send(clientSock,
-                (char*)&reply,
-                sizeof(reply),
-                0);
-
-            break;
-        }
-        case MessageType::DELETE_FRIEND:
-        {
-            Message reply{};
-
-            reply.type =
-                MessageType::DELETE_FRIEND_RESULT;
-
-            reply.result =
-                friendManager.DeleteFriend(
-                    msg.sender,
-                    msg.receiver);
-
-            send(clientSock,
-                (char*)&reply,
-                sizeof(reply),
-                0);
-
-            break;
-        }
-        case MessageType::ACCEPT_FRIEND:
-        {
-            Message reply{};
-
-            reply.type =
-                MessageType::ACCEPT_FRIEND_RESULT;
-
-            bool ok =
-                friendManager.AcceptRequest(
-                    msg.sender,
-                    msg.receiver);
-
-            reply.result = ok;
-
-            send(clientSock,
-                (char*)&reply,
-                sizeof(reply),
-                0);
-
-            break;
-        }
         case MessageType::READY:
         {
             std::cout
@@ -479,10 +582,7 @@ case MessageType::ADD_FRIEND:
                 << msg.sender
                 << std::endl;
 
-            //-----------------------
             // 发离线消息
-            //-----------------------
-
             auto list =
                 offlineManager.GetMessages(
                     msg.sender);
@@ -546,6 +646,46 @@ case MessageType::ADD_FRIEND:
 
             break;
         }
+        case MessageType::ACCEPT_FRIEND:
+        {
+            Message reply{};
+
+            reply.type =
+                MessageType::ACCEPT_FRIEND_RESULT;
+
+            bool ok =
+                friendManager.AcceptRequest(
+                    msg.sender,
+                    msg.receiver);
+
+            reply.result = ok;
+
+            send(clientSock,
+                (char*)&reply,
+                sizeof(reply),
+                0);
+
+            break;
+        }
+        case MessageType::DELETE_FRIEND:
+        {
+            Message reply{};
+
+            reply.type =
+                MessageType::DELETE_FRIEND_RESULT;
+
+            reply.result =
+                friendManager.DeleteFriend(
+                    msg.sender,
+                    msg.receiver);
+
+            send(clientSock,
+                (char*)&reply,
+                sizeof(reply),
+                0);
+
+            break;
+        }
         case MessageType::REJECT_FRIEND:
         {
             Message reply{};
@@ -589,23 +729,32 @@ case MessageType::ADD_FRIEND:
 
             break;
         }
-        case MessageType::LOGOUT:
+        case MessageType::FRIEND_REQUEST_LIST:
         {
-            std::string name =
-                manager.GetUserName(clientSock);
+            Message reply{};
 
-            manager.Logout(clientSock);
+            reply.type =
+                MessageType::FRIEND_REQUEST_LIST;
 
-            std::cout << "[LOGOUT] "
-                << name
-                << std::endl;
+            std::string list =
+                friendManager.GetPendingString(
+                    msg.sender);
+
+            strcpy_s(reply.text,
+                MAX_TEXT_LEN,
+                list.c_str());
+
+            send(clientSock,
+                (char*)&reply,
+                sizeof(reply),
+                0);
 
             break;
         }
 
         default:
             break;
+       
         }
-    }
 }
 
