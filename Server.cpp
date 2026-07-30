@@ -278,13 +278,8 @@ void Server::HandleClient(int clientSock)
         if (ret == 0)
         {
 
-            std::cout
-                << "client disconnect:"
-                << clientSock
-                << std::endl;
-           
             RemoveConnection(clientSock);
-       
+
             return;
         }
         if (ret < 0)
@@ -293,7 +288,9 @@ void Server::HandleClient(int clientSock)
                 errno == EWOULDBLOCK)
             {
                 std::cout<< "errno == EAGAIN" << std::endl;
+
                 EnableRead(clientSock);
+
                 return;
             }
 
@@ -752,4 +749,9 @@ void Server::RemoveConnection(int clientSock)
         nullptr
     );
     close(clientSock);
+
+    std::cout
+        << "client disconnect:"
+        << clientSock
+        << std::endl;
 }
