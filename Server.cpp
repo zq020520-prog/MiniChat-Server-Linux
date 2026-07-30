@@ -183,8 +183,23 @@ void Server::Run()
                       //  设置客户端socket非阻塞           
                     SetNonBlock(clientSock);
 
-                        //加入epoll
-                    EnableRead(clientSock);
+                    //加入epoll
+
+                    epoll_event clientEvent{};
+
+                    clientEvent.events =
+                        EPOLLIN | EPOLLONESHOT;
+
+                    clientEvent.data.fd =
+                        clientSock;
+
+
+                    epoll_ctl(
+                        epollFd,
+                        EPOLL_CTL_ADD,
+                        clientSock,
+                        &clientEvent
+                    );
 
                     std::cout << "new client:"  << clientSock  << std::endl;
 
