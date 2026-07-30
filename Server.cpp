@@ -12,7 +12,7 @@
 
 Server::Server()
     : 
-    pool(4), 
+    pool(32), 
     userManager(&database),
     friendManager(&database),
     offlineManager(&database)
