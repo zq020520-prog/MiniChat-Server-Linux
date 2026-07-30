@@ -455,6 +455,7 @@ void Server::HandleClient(int clientSock)
                 clientSock,
                 nullptr
             );
+            close(clientSock);
 
             {
                 std::lock_guard<std::mutex> lock(clientStateMutex);
