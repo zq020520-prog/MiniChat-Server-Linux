@@ -407,16 +407,11 @@ void Server::HandleClient(int clientSock)
             break;
         }
         case MessageType::LOGOUT:
-        {
-            std::string name =
-                manager.GetUserName(clientSock);
+        { 
 
             manager.Logout(clientSock);
 
-            std::cout << "[LOGOUT] "
-                << name
-                << std::endl;
-
+           
             epoll_ctl(
                 epollFd,
                 EPOLL_CTL_DEL,

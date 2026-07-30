@@ -43,6 +43,10 @@ void ClientManager::Logout(int sock)
 
     onlineUsers.erase(username);
 
+    std::cout << "[LOGOUT] "
+        << username
+        << std::endl;
+
 }
 
 int ClientManager::GetSocket(const std::string& username)
