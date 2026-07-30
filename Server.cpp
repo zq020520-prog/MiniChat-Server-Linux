@@ -278,7 +278,14 @@ void Server::HandleClient(int clientSock)
                 (char*)&msg,
                 sizeof(msg),
                 0);
-
+        std::cout
+            << "recv start fd="
+            << clientSock
+            << std::endl;
+        std::cout
+            << "recv ret="
+            << ret
+            << std::endl;
         if (ret == 0)
         {
 
