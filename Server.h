@@ -27,10 +27,10 @@ public:
 
     void Run();
 
-    struct ClientState
-    {
-        bool processing = false;
-    };
+    void EnableRead(int clientSock);
+
+    void RemoveConnection(int clientSock)
+
 private:
 
     void HandleClient(int clientSock);
@@ -40,10 +40,6 @@ private:
     int listenSock;
 
     int epollFd;
-
-    std::unordered_map<int, ClientState> clientStates;
-
-    std::mutex clientStateMutex;
 
     ThreadPool pool;
 

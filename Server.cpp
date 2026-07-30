@@ -184,25 +184,10 @@ void Server::Run()
                     SetNonBlock(clientSock);
 
                         //加入epoll
-                    epoll_event clientEvent{};
-
-                    clientEvent.events =
-                        EPOLLIN;
-
-                    clientEvent.data.fd =
-                        clientSock;
-
-                    epoll_ctl(
-                        epollFd,
-                        EPOLL_CTL_ADD,
-                        clientSock,
-                        &clientEvent
-                    );
+                    EnableRead(clientSock);
 
                     std::cout << "new client:"  << clientSock  << std::endl;
-                    std::lock_guard<std::mutex> lock(clientStateMutex);
 
-                    clientStates[clientSock].processing = false;
                 }
 
             }
@@ -214,42 +199,20 @@ void Server::Run()
                 int clientSock = fd;
 
 
-                bool needSubmit = false;
+                std::cout
+                    << "submit fd:"
+                    << clientSock
+                    << std::endl;
 
 
-                {
-                    std::lock_guard<std::mutex> lock(clientStateMutex);
-
-
-                    auto& state = clientStates[clientSock];
-
-
-                    // 当前没有线程处理
-                    if (state.processing == false)
+                pool.Submit(
+                    [this, clientSock]()
                     {
-                        state.processing = true;
 
-                        needSubmit = true;
-                    }
+                        HandleClient(clientSock);
 
-                }
+                    });
 
-                if (needSubmit)
-                {
-                    std::cout
-                        << "submit fd:"
-                        << clientSock
-                        << std::endl;
-
-
-                    pool.Submit(
-                        [this, clientSock]()
-                        {
-
-                            HandleClient(clientSock);
-
-                        });
-                }
 
             }
            
@@ -304,21 +267,9 @@ void Server::HandleClient(int clientSock)
                 << "client disconnect:"
                 << clientSock
                 << std::endl;
-            std::cout <<" HandleClient == 0 " << std::endl;
-            manager.Logout(clientSock);
-            //客户端关闭
-
-            epoll_ctl(
-                epollFd,
-                EPOLL_CTL_DEL,
-                clientSock,
-                nullptr
-            );
-
-            close(clientSock);
-            std::lock_guard<std::mutex> lock(clientStateMutex);
-
-            clientStates.erase(clientSock);
+           
+            RemoveConnection(int clientSock);
+       
             return;
         }
         if (ret < 0)
@@ -326,34 +277,13 @@ void Server::HandleClient(int clientSock)
             if (errno == EAGAIN ||
                 errno == EWOULDBLOCK)
             {
-                std::cout
-                    << "EAGAIN fd="
-                    << clientSock
-                    << std::endl;
-
-
-                {
-                    std::lock_guard<std::mutex> lock(clientStateMutex);
-
-                    clientStates[clientSock].processing = false;
-                }
+                std::cout<< "errno == EAGAIN" << std::endl;
+                EnableRead(clientSock);
                 return;
             }
 
-            std::cout << "HandleClient < 0 " << std::endl;
-            manager.Logout(clientSock);
-
-            epoll_ctl(
-                epollFd,
-                EPOLL_CTL_DEL,
-                clientSock,
-                nullptr
-            );
-
-            close(clientSock);
-            std::lock_guard<std::mutex> lock(clientStateMutex);
-
-            clientStates.erase(clientSock);
+            RemoveConnection(int clientSock);
+    
             return;
         }
 
@@ -445,23 +375,7 @@ void Server::HandleClient(int clientSock)
         case MessageType::LOGOUT:
         { 
 
-            std::cout << "LOGOUT" << std::endl;
-            manager.Logout(clientSock);
-
-           
-            epoll_ctl(
-                epollFd,
-                EPOLL_CTL_DEL,
-                clientSock,
-                nullptr
-            );
-            close(clientSock);
-
-            {
-                std::lock_guard<std::mutex> lock(clientStateMutex);
-
-                clientStates.erase(clientSock);
-            }
+            RemoveConnection(clientSock);
 
             return;
         }
@@ -792,16 +706,35 @@ void Server::HandleClient(int clientSock)
             
       }
 
-      std::lock_guard<std::mutex> lock(clientStateMutex);
-
-
-      auto it =
-          clientStates.find(clientSock);
-
-
-      if (it != clientStates.end())
-      {
-          it->second.processing = false;
-      }
+      EnableRead(clientSock);
 }
 
+void Server::EnableRead(int clientSock)
+{
+    epoll_event ev{};
+
+    ev.events =
+        EPOLLIN | EPOLLONESHOT;
+
+    ev.data.fd =
+        clientSock;
+
+    epoll_ctl(
+        epollFd,
+        EPOLL_CTL_MOD,
+        clientSock,
+        &ev
+    );
+}
+void Server::RemoveConnection(int clientSock)
+{
+    manager.Logout(clientSock);
+
+    epoll_ctl(
+        epollFd,
+        EPOLL_CTL_DEL,
+        clientSock,
+        nullptr
+    );
+    close(clientSock);
+}
