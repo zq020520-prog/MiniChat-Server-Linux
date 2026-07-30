@@ -30,6 +30,7 @@ bool ClientManager::Login(const std::string& username,
 }
 void ClientManager::Logout(int sock)
 {
+   
     std::unique_lock<std::shared_mutex> lock(mtx);
 
     auto it = socketUsers.find(sock);

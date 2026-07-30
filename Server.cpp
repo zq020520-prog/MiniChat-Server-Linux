@@ -214,7 +214,7 @@ void Server::Run()
                 if (events[i].events &
                     (EPOLLERR | EPOLLHUP | EPOLLRDHUP))
                 {
-
+                    std::cout << "Run" << std::endl;
                     manager.Logout(clientSock);
                     //客户端关闭
 
@@ -278,11 +278,11 @@ void Server::HandleClient(int clientSock)
         if (ret == 0)
         {
 
-            std::cout
-                << "client disconnect:"
-                << clientSock
-                << std::endl;
-
+           // std::cout
+           //     << "client disconnect:"
+          //      << clientSock
+          //      << std::endl;
+            std::cout <<" HandleClient == 0 " << std::endl;
             manager.Logout(clientSock);
             //客户端关闭
 
@@ -306,7 +306,7 @@ void Server::HandleClient(int clientSock)
                 // 当前没有数据
                 return;
             }
-
+            std::cout << "HandleClient < 0 " << std::endl;
             manager.Logout(clientSock);
 
             epoll_ctl(
@@ -409,6 +409,7 @@ void Server::HandleClient(int clientSock)
         case MessageType::LOGOUT:
         { 
 
+            std::cout << "LLLLLL" << std::endl;
             manager.Logout(clientSock);
 
            
