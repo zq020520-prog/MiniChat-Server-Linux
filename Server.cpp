@@ -231,6 +231,10 @@ void Server::Run()
                 }
                 if (events[i].events & EPOLLIN)
                 {
+                    std::cout
+                        << "submit fd:"
+                        << clientSock
+                        << std::endl;
                     pool.Submit(
                         [this, clientSock]()
                         {
