@@ -200,7 +200,9 @@ void Server::Run()
                     );
 
                     std::cout << "new client:"  << clientSock  << std::endl;
+                    std::lock_guard<std::mutex> lock(clientStateMutex);
 
+                    clientStates[clientSock].processing = false;
                 }
 
             }
@@ -211,38 +213,46 @@ void Server::Run()
 
                 int clientSock = fd;
 
-                if (events[i].events &
-                    (EPOLLERR | EPOLLHUP | EPOLLRDHUP))
+
+                bool needSubmit = false;
+
+
                 {
-                    std::cout << "Run" << std::endl;
-                    manager.Logout(clientSock);
-                    //客户端关闭
+                    std::lock_guard<std::mutex> lock(clientStateMutex);
 
-                    epoll_ctl(
-                        epollFd,
-                        EPOLL_CTL_DEL,
-                        clientSock,
-                        nullptr );
 
-                    close(clientSock);
+                    auto& state = clientStates[clientSock];
 
-                    continue;
+
+                    // 当前没有线程处理
+                    if (state.processing == false)
+                    {
+                        state.processing = true;
+
+                        needSubmit = true;
+                    }
 
                 }
-                if (events[i].events & EPOLLIN)
+
+                if (needSubmit)
                 {
                     std::cout
                         << "submit fd:"
                         << clientSock
                         << std::endl;
+
+
                     pool.Submit(
                         [this, clientSock]()
                         {
+
                             HandleClient(clientSock);
 
                         });
                 }
+
             }
+           
         }
     }
 }
@@ -286,13 +296,14 @@ void Server::HandleClient(int clientSock)
             << "recv ret="
             << ret
             << std::endl;
+
         if (ret == 0)
         {
 
-           // std::cout
-           //     << "client disconnect:"
-          //      << clientSock
-          //      << std::endl;
+            std::cout
+                << "client disconnect:"
+                << clientSock
+                << std::endl;
             std::cout <<" HandleClient == 0 " << std::endl;
             manager.Logout(clientSock);
             //客户端关闭
@@ -305,18 +316,14 @@ void Server::HandleClient(int clientSock)
             );
 
             close(clientSock);
+            std::lock_guard<std::mutex> lock(clientStateMutex);
 
+            clientStates.erase(clientSock);
             return;
         }
         if (ret < 0)
         {
 
-            if (errno == EAGAIN ||
-                errno == EWOULDBLOCK)
-            {
-                // 当前没有数据
-                return;
-            }
             std::cout << "HandleClient < 0 " << std::endl;
             manager.Logout(clientSock);
 
@@ -328,12 +335,14 @@ void Server::HandleClient(int clientSock)
             );
 
             close(clientSock);
+            std::lock_guard<std::mutex> lock(clientStateMutex);
 
+            clientStates.erase(clientSock);
             return;
         }
 
-        switch (msg.type)
-        {
+      switch (msg.type)
+      {
         case MessageType::REGISTER:
         {
             RegisterResult result =
@@ -431,9 +440,13 @@ void Server::HandleClient(int clientSock)
                 nullptr
             );
 
-            close(clientSock);
+            {
+                std::lock_guard<std::mutex> lock(clientStateMutex);
 
-            break;
+                clientStates.erase(clientSock);
+            }
+
+            return;
         }
         case MessageType::ADD_FRIEND:
         {
@@ -578,9 +591,6 @@ void Server::HandleClient(int clientSock)
 
             break;
         }
-
-
-
 
         case MessageType::READY:
         {
@@ -761,7 +771,20 @@ void Server::HandleClient(int clientSock)
 
         default:
             break;
-       
-        }
+
+            
+      }
+
+      std::lock_guard<std::mutex> lock(clientStateMutex);
+
+
+      auto it =
+          clientStates.find(clientSock);
+
+
+      if (it != clientStates.end())
+      {
+          it->second.processing = false;
+      }
 }
 

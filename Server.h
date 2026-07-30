@@ -13,7 +13,8 @@
 #include "UserManager.h"
 #include "FriendManager.h"
 #include "OfflineMessageManager.h"
-
+#include <unordered_map>
+#include <mutex>
 class Server
 {
 public:
@@ -26,6 +27,10 @@ public:
 
     void Run();
 
+    struct ClientState
+    {
+        bool processing = false;
+    };
 private:
 
     void HandleClient(int clientSock);
@@ -36,6 +41,9 @@ private:
 
     int epollFd;
 
+    std::unordered_map<int, ClientState> clientStates;
+
+    std::mutex clientStateMutex;
 
     ThreadPool pool;
 
