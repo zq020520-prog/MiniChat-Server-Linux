@@ -491,8 +491,6 @@ void Server::HandleClient(int clientSock)
                     << msg.sender
                     << " -> "
                     << msg.receiver
-                    << " : "
-                    << msg.text
                     << std::endl;
             }
             else
