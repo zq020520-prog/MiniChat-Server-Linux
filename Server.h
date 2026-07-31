@@ -6,7 +6,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include "ThreadPool.h"
-
+#include "Message.h"
 #include <sys/epoll.h>
 #include "ClientManager.h"
 #include "Database.h"
