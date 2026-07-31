@@ -34,7 +34,13 @@ public:
 private:
 
     void HandleClient(int clientSock);
+
     void SetNonBlock(int clientSock);
+
+    void SendMessage(
+        int sock,
+        Message& msg);
+
 private:
 
     int listenSock;
@@ -52,4 +58,6 @@ private:
     FriendManager friendManager;
 
     OfflineMessageManager offlineManager;
+
+    std::unordered_map<int, std::mutex> sendMutexMap;
 };

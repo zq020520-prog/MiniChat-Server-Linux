@@ -183,6 +183,8 @@ void Server::Run()
                       //  设置客户端socket非阻塞           
                     SetNonBlock(clientSock);
 
+                    sendMutexMap.try_emplace(clientSock);
+
                     //加入epoll
 
                     epoll_event clientEvent{};
@@ -316,10 +318,7 @@ void Server::HandleClient(int clientSock)
                 break;
             }
             
-            send(clientSock,
-                (char*)&reply,
-                sizeof(reply),
-                0);
+            SendMessage(clientSock, reply);
 
             break;
         }
@@ -362,10 +361,7 @@ void Server::HandleClient(int clientSock)
                 strcpy_s(reply.text, "Password Error");
             }
 
-            send(clientSock,
-                (char*)&reply,
-                sizeof(reply),
-                0);
+            SendMessage(clientSock, reply);
                
             break;
         }
@@ -390,10 +386,7 @@ void Server::HandleClient(int clientSock)
             reply.result = (int)result;
 
             // 回复申请者
-            send(clientSock,
-                (char*)&reply,
-                sizeof(reply),
-                0);
+            SendMessage(clientSock, reply);
 
             if (result == AddFriendResult::Success)
             {
@@ -415,10 +408,7 @@ void Server::HandleClient(int clientSock)
                     notify.type =
                         MessageType::PENDING_NOTIFY;
 
-                    send(target,
-                        (char*)&notify,
-                        sizeof(notify),
-                        0);
+                    SendMessage(clientSock, notify);
                 }
                 else
                 {
@@ -463,10 +453,7 @@ void Server::HandleClient(int clientSock)
                 strcpy_s(reply.text,
                     "You are not friends.");
             
-                send(clientSock,
-                    (char*)&reply,
-                    sizeof(reply),
-                    0);
+                SendMessage(clientSock, reply);
 
                 std::cout << "[CHAT BLOCKED] "
                     << msg.sender
@@ -482,10 +469,7 @@ void Server::HandleClient(int clientSock)
 
             if (target >= 0)
             {
-                send(target,
-                    (char*)&msg,
-                    sizeof(msg),
-                    0);
+                SendMessage(clientSock, msg);
 
                 std::cout << "[CHAT] "
                     << msg.sender
@@ -564,10 +548,7 @@ void Server::HandleClient(int clientSock)
                         item.text.c_str());
                 }
 
-                send(clientSock,
-                    (char*)&offlineMsg,
-                    sizeof(offlineMsg),
-                    0);
+                SendMessage(clientSock, offlineMsg);
 
                 std::cout
                     << "[OFFLINE SEND] "
@@ -603,10 +584,7 @@ void Server::HandleClient(int clientSock)
 
             reply.result = ok;
 
-            send(clientSock,
-                (char*)&reply,
-                sizeof(reply),
-                0);
+            SendMessage(clientSock, reply);
 
             break;
         }
@@ -622,10 +600,7 @@ void Server::HandleClient(int clientSock)
                     msg.sender,
                     msg.receiver);
 
-            send(clientSock,
-                (char*)&reply,
-                sizeof(reply),
-                0);
+            SendMessage(clientSock, reply);
 
             break;
         }
@@ -644,10 +619,7 @@ void Server::HandleClient(int clientSock)
             reply.result = ok ? 1 : 0;
 
             // 回复拒绝者(Bob)
-            send(clientSock,
-                (char*)&reply,
-                sizeof(reply),
-                0);
+            SendMessage(clientSock, reply);
 
             break;
         }
@@ -665,10 +637,7 @@ void Server::HandleClient(int clientSock)
                 MAX_TEXT_LEN,
                 list.c_str());
 
-            send(clientSock,
-                (char*)&reply,
-                sizeof(reply),
-                0);
+            SendMessage(clientSock, reply);
 
             break;
         }
@@ -687,10 +656,7 @@ void Server::HandleClient(int clientSock)
                 MAX_TEXT_LEN,
                 list.c_str());
 
-            send(clientSock,
-                (char*)&reply,
-                sizeof(reply),
-                0);
+            SendMessage(clientSock, reply);
 
             break;
         }
@@ -731,10 +697,37 @@ void Server::RemoveConnection(int clientSock)
         clientSock,
         nullptr
     );
+
+    sendMutexMap.erase(clientSock);
+
     close(clientSock);
 
     std::cout
         << "client disconnect:"
         << clientSock
         << std::endl;
+}
+void Server::SendMessage(
+    int sock,
+    Message& msg)
+{
+
+    auto it =
+        sendMutexMap.find(sock);
+
+
+    if (it == sendMutexMap.end())
+    {
+        return;
+    }
+
+
+    std::lock_guard<std::mutex> lock(
+        it->second
+    );
+
+    send(sock,
+        (char*)&msg,
+        sizeof(msg),
+        0);
 }
