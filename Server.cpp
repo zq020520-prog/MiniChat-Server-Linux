@@ -408,7 +408,7 @@ void Server::HandleClient(int clientSock)
                     notify.type =
                         MessageType::PENDING_NOTIFY;
 
-                    SendMessage(clientSock, notify);
+                    SendMessage(target, notify);
                 }
                 else
                 {
@@ -469,7 +469,7 @@ void Server::HandleClient(int clientSock)
 
             if (target >= 0)
             {
-                SendMessage(clientSock, msg);
+                SendMessage(target, msg);
 
                 std::cout << "[CHAT] "
                     << msg.sender
