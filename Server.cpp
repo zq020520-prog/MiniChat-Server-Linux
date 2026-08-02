@@ -572,54 +572,28 @@ void Server::HandleClient(int clientSock)
         }
         case MessageType::ACCEPT_FRIEND:
         {
-            Message reply{};
-
-            reply.type =
-                MessageType::ACCEPT_FRIEND_RESULT;
-
-            bool ok =
+    
                 friendManager.AcceptRequest(
                     msg.sender,
                     msg.receiver);
-
-            reply.result = ok;
-
-            SendMessage(clientSock, reply);
 
             break;
         }
         case MessageType::DELETE_FRIEND:
         {
-            Message reply{};
 
-            reply.type =
-                MessageType::DELETE_FRIEND_RESULT;
-
-            reply.result =
                 friendManager.DeleteFriend(
                     msg.sender,
                     msg.receiver);
-
-            SendMessage(clientSock, reply);
 
             break;
         }
         case MessageType::REJECT_FRIEND:
         {
-            Message reply{};
 
-            reply.type =
-                MessageType::REJECT_FRIEND_RESULT;
-
-            bool ok =
                 friendManager.RejectRequest(
                     msg.sender,
                     msg.receiver);
-
-            reply.result = ok ? 1 : 0;
-
-            // 回复拒绝者(Bob)
-            SendMessage(clientSock, reply);
 
             break;
         }

@@ -43,6 +43,8 @@ void Database::Close()
 // 执行SQL语句
 bool Database::Execute(const std::string& sql)
 {
+    std::lock_guard<std::mutex> lock(writeMutex);
+
     char* errMsg = nullptr;
 
     int rc = sqlite3_exec(
