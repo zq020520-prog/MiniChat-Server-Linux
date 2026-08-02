@@ -339,6 +339,8 @@ void Server::HandleClient(int clientSock)
                 {
                     reply.result = (int)LoginResult::Success;
 
+                    strcpy_s(reply.receiver, msg.sender);
+
                     strcpy_s(reply.text, "Login Success");
                 }
                 else
